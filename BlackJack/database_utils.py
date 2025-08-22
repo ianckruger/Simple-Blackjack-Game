@@ -15,6 +15,7 @@ def init_db(path=DB_PATH):
                    );
                    """)
     
+    # H is like the horizontal sides of the cards, v is the vertical
     cursor.execute("""
             CREATE TABLE IF NOT EXISTS themes (
                    name TEXT PRIMARY KEY,
@@ -96,3 +97,39 @@ def init_db(path=DB_PATH):
                 ("face_up", face_up),
                 ("face_down", face_down),
             ])
+        
+
+
+# Denoting functions now ( Setters/Getters and Theme helpers )
+
+def setActiveTheme(name, path=DB_PATH):
+    connect = sqlite3.connect(path)
+    cursor = connect.cursor()
+    cursor.execute("SELECT 1 FROM themes WHERE name=?", (name,))
+    if not cursor.fetchone():
+        connect.close()
+        raise ValueError(f"Theme '{name}' does not exist")
+    cursor.execute("REPLACE INTO settings(key, value) VALUES('active_theme', ?)", (name,))
+    connect.commit()
+    connect.close()
+
+def getActiveTheme(path=DB_PATH):
+    connect = sqlite3.connect(path)
+    cursor = connect.cursor()
+    cursor.execute("SELECT value FROM setting WHERE key='active_theme'")
+    themeName = cursor.fetchone()[0]
+    cursor.execute("""
+            SELECT name, spade, heart, diamond, club, top_left, top_right, bottom_left, bottom_right, h, v
+            FROM themes WHERE name=?
+                   """, (themeName,))
+    row = cursor.fetchone()
+    connect.close()
+    if not row:
+        raise RuntimeError("Active theme not found")
+    keys = ["name","spade","heart","diamond","club","tl","tr","bl","br","h","v"]
+    return dict(zip(keys, row))
+
+# Load and Render Template
+
+
+# For stats; Record and query

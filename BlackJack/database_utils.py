@@ -129,7 +129,116 @@ def getActiveTheme(path=DB_PATH):
     keys = ["name","spade","heart","diamond","club","tl","tr","bl","br","h","v"]
     return dict(zip(keys, row))
 
-# Load and Render Template
+# Load and Render Template Functions
+def _loadTemplate(name, path=DB_PATH):
+    connect = sqlite3.connect(path)
+    cursor = connect.cursor()
+    cursor.execute("SELECT template FROM card_templates WHERE name=?", (name,))
+    row = cursor.fetchone()
+    connect.close()
+    if not row:
+        raise ValueError(f"Template '{name}' not found")
+    return row[0]
+
+# Rank --> value of the card, suit --> spade, heart, diamond, club
+def renderCard(rank, suit, hidden=False, path=DB_PATH):
+    """
+    rank: 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'
+    suit: 'S', 'H', 'D', 'C'
+    """
+    theme = getActiveTheme(path)
+    if hidden:
+        tmpl = _loadTemplate("face_down", path)
+    else:
+        tmpl = _loadTemplate("face_up", path)
+
+    suit_char = {
+        "S": theme["spade"],
+        "H": theme["heart"],
+        "D": theme["diamond"],
+        "C": theme["club"],
+    }[suit]
+
+    rank_l = rank.ljust(2)
+    rank_r = rank.rjust(2)
+
+    out = tmpl.format(
+        rank_l=rank_l,
+        rank_r=rank_r,
+        suit=suit_char,
+        tl=theme["tl"], tr=theme["tr"], bl=theme["bl"], br=theme["br"],
+        h=theme["h"], v=theme["v"]
+    )
+    return out.splitlines()
+
+def renderHand(cards, hideFirst=False, path=DB_PATH):
+    """
+    cards: list of (rank, suit) e.g. [('A', 'S'), ('10', 'H')]
+    return a single string with cards "side by side"
+    """
+
+    blocks = [
+        renderCard(r,s,hidden=(hideFirst and i == 0), path=path)
+        for i, (r,s) in enumerate(cards)
+    ]
+    lines = []
+    rows = len(blocks[0])
+    for row in range(rows):
+        lines.append("  ".join(block[row] for block in blocks))
+    return "\n".join(lines)
 
 
-# For stats; Record and query
+# For stats; Record and Query
+
+def record_round(playerID, bet, outcome, delta, playerTotal=None, dealerTotal=None, notes=None, path=DB_PATH):
+    """
+    outcome: 'win', 'lose', 'push', 'blackjack'
+    delta: net chip change (e.g., +10 for win, -10 for lose, +15 for blackjack if 3:2 on 10 bet, etc.)
+    """
+    connect = sqlite3.connect(path)
+    cursor = connect.cursor()
+    cursor.execute("""
+        INSERT INTO rounds(ts, player_id, bet, outcome, delta, player_total, dealer_total, notes)
+        VALUES(?,?,?,?,?,?,?,?)
+    """, (
+        datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        playerID, bet, outcome, delta, playerTotal, dealerTotal, notes
+    ))
+    connect.commit()
+    connect.close()
+
+# return dict of stats (saves over time)
+def getPlayerStats(playerID, path=DB_PATH):
+    connect = sqlite3.connect(path)
+    cursor = connect.cursor()
+
+    cursor.execute("SELECT COUNT(*), COALESCE(SUM(bet),0), COALESCE(SUM(delta),0) FROM rounds WHERE player_id=?", (playerID,))
+    games, total_bet, net = cursor.fetchone()
+
+    cursor.execute("""
+        SELECT outcome, COUNT(*)
+        FROM rounds
+        WHERE player_id=?
+        GROUP BY outcome
+    """, (playerID,))
+    counts = dict(cursor.fetchall())
+    wins = counts.get("win", 0) + counts.get("blackjack", 0)
+    losses = counts.get("lose", 0)
+    pushes = counts.get("push", 0)
+    blackjacks = counts.get("blackjack", 0)
+    winRate = (wins / games) if games else 0.0
+    averageBet = (total_bet / games ) if games else 0.0
+
+    connect.close()
+    return {
+        "games": games,
+        "wins": wins,
+        "losses": losses,
+        "pushes": pushes,
+        "blackjacks": blackjacks,
+        "win_rate": round(winRate, 3),
+        "avg_bet": round(averageBet, 2),
+        "net": net,
+        "total_bet": total_bet,
+    }
+    

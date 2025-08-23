@@ -1,4 +1,5 @@
 import random as rand
+from database_utils import init_db, renderHand, record_round, getPlayerStats
 
 cards = [2,3,4,5,6,7,8,9,10,"J","Q","K","A",2,3,4,5,6,7,8,9,10,"J","Q","K","A",2,3,4,5,6,7,8,9,10,"J","Q","K","A",2,3,4,5,6,7,8,9,10,"J","Q","K","A"]
 
@@ -39,6 +40,8 @@ def playRound():
         displayCards()
 
 
-def main() {
 
-}
+if __name__ == "__main__":
+    init_db()
+    playRound()
+    print(getPlayerStats("player1"))

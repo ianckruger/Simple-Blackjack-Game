@@ -182,8 +182,8 @@ def renderHand(cards, hideFirst=False, path=DB_PATH):
     return a single string with cards side by side
     """
     blocks = [
-        renderCard(r, s, hidden=(hideFirst and i == 0), path=path)
-        for i, (r, s) in enumerate(cards)
+        renderCard(card[:-1], card[-1], hidden=(hideFirst and i == 0), path=path)
+        for i, card in enumerate(cards)
     ]
     lines = []
     rows = len(blocks[0])

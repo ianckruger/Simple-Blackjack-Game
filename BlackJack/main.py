@@ -8,14 +8,14 @@ deck = [rank + suit for suit in suits for rank in ranks]
 def shuffleCards() :
     # While Original array is not empty, add to new array
     newCards = []
-    while deck:
-        index = rand.randint(1,len(deck))
+    while len(deck) != len(newCards):
+        index = rand.randint(0,len(deck)-1)
         newCards.append(deck[index])
 
     return newCards
 
 def getCard(playedCards,cards):
-    index = rand.randint(0,len(cards) -1)
+    index = rand.randint(0,len(cards)-1)
     card1 = cards[index]
     playedCards.append(card1)
     cards.pop(index)
@@ -32,18 +32,27 @@ def compareCards():
     return True
 
 def playRound():
-    deck = shuffleCards()
+    totalValue = 0
+    playingDeck = shuffleCards()
     playedCards = []
-    card1 = getCard(playedCards, cards)
-    card2 = getCard(playedCards, cards)
-    overLimit = displayCards()
-    if  not overLimit:
-        card3 = getCard(playedCards, cards)
-        displayCards()
+    card1 = getCard(playedCards, playingDeck)
+    card2 = getCard(playedCards, playingDeck)
+    print(renderHand(playedCards))
+    if (card1[:-1] == "A" or card2[:-1] == "A"):
+        choice = input("Would you like to count Ace as 1 or 11?")
+        if str(choice) == "11":
+            totalValue += 11
+        else:
+            totalValue += 1
+
+
+    # if  not overLimit:
+    #     card3 = getCard(playedCards, playingDeck)
+    #     displayCards()
 
 def login():
     print("Do you want to login (or not, and continue as guest)?")
-    choice = input("Y/N")
+    choice = input("Y/N: ")
     saveStats = False
     if (choice.lower == "y"):
         saveStats = True
@@ -65,5 +74,4 @@ if __name__ == "__main__":
     # print("\nStats:", getPlayerStats("player1"))
     init_db()
     login()
-    playRound()
-    print(getPlayerStats("player1"))  
+    playRound() 

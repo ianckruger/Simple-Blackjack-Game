@@ -9,98 +9,98 @@ def init_db(path=DB_PATH):
     cursor = connect.cursor()
 
     cursor.execute("""
-            CREATE TABLE IF NOT EXISTS settings (
-                   key TEXT PRIMARY KEY,
-                   value TEXT NOT NULL
-                   );
-                   """)
-    
-    # H is like the horizontal sides of the cards, v is the vertical
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+    """)
+
+    # H is horizontal, v is vertical
     cursor.execute("""
-            CREATE TABLE IF NOT EXISTS themes (
-                   name TEXT PRIMARY KEY,
-                   spade TEXT NOT NULL,
-                   heart TEXT NOT NULL,
-                   diamond TEXT NOT NULL,
-                   club TEXT NOT NULL,
-                   top_left TEXT NOT NULL,
-                   top_right TEXT NOT NULL,
-                   bottom_left TEXT NOT NULL,
-                   bottom_right TEXT NOT NULL,
-                   h TEXT NOT NULL,
-                   v TEXT NOT NULL
-                   );
-                   """)
-    
+        CREATE TABLE IF NOT EXISTS themes (
+            name TEXT PRIMARY KEY,
+            spade TEXT NOT NULL,
+            heart TEXT NOT NULL,
+            diamond TEXT NOT NULL,
+            club TEXT NOT NULL,
+            top_left TEXT NOT NULL,
+            top_right TEXT NOT NULL,
+            bottom_left TEXT NOT NULL,
+            bottom_right TEXT NOT NULL,
+            h TEXT NOT NULL,
+            v TEXT NOT NULL
+        );
+    """)
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS card_templates (
-                   name TEXT PRIMARY KEY,
-                   template TEXT NOT NULL
-                   );
-                   """)
-    
-    # Creating a statistics table (just to track wins, losses, perfect hits, etc)
-    # Outcome = win, loss, push, blackjack
-    # Delta is the net cash won/loss (if bets are to be implemented)
-    cursor.execute("""
-            CREATE TABLE IF NOT EXISTS rounds (
-                   id INTEGER PRIMARY KEY AUTOINCREMENT,
-                   ts TEXT NOT NULL,
-                   player_id TEXT NOT NULL,
-                   bet INTEGER NOT NULL,
-                   outcome TEXT NOT NULL,
-                   delte INTEGER NOT NULL,
-                   player_total INTEGER,
-                   dealer_total INTEGER,
-                   notes TEXT
-                   );
-                   """)
-    
+            name TEXT PRIMARY KEY,
+            template TEXT NOT NULL
+        );
+    """)
 
-    # Default theming, provide a unicode for cuter objects as well as a fallback ascii
+    # rounds stats
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS rounds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT NOT NULL,
+            player_id TEXT NOT NULL,
+            bet INTEGER NOT NULL,
+            outcome TEXT NOT NULL,   -- 'win','lose','push','blackjack'
+            delta INTEGER NOT NULL,  -- net chips change
+            player_total INTEGER,
+            dealer_total INTEGER,
+            notes TEXT
+        );
+    """)
+
+    # Seed themes if empty
     cursor.execute("SELECT COUNT(*) FROM themes;")
     if cursor.fetchone()[0] == 0:
         cursor.executemany("""
-                    INSERT INTO themes(name, spade, heart, diamond, club, top_left, top_right, bottom_left, bottom_right, h, v)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?)
-                    """, [
-                        ("unicode", "♠", "♥", "♦", "♣", "┌", "┐", "└", "┘", "─", "│"),
-                        ("ascii",  "^", "v", "<>", "()", "+", "+", "+", "+", "-", "|"),
-                    ])
-        
+            INSERT INTO themes(name, spade, heart, diamond, club, top_left, top_right, bottom_left, bottom_right, h, v)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?)
+        """, [
+            ("unicode", "♠", "♥", "♦", "♣", "┌", "┐", "└", "┘", "─", "│"),
+            ("ascii",   "^", "v", "<>", "()", "+", "+", "+", "+", "-", "|"),
+        ])
 
+    # Seed templates if empty
     cursor.execute("SELECT COUNT(*) FROM card_templates;")
     if cursor.fetchone()[0] == 0:
         face_up = dedent("""\
-        {tl}{h}{h}{h}{h}{h}{h}{h}{h}{tr}
-        {v}{rank_1}       {v}
-        {v}         {v}
-        {v}    {suit}    {v}
-        {v}         {v}
-        {v}         {v}
-        {v}       {rank_r}{v}
-        {bl}{h}{h}{h}{h}{h}{h}{h}{h}{br}""")
+            {tl}{h}{h}{h}{h}{h}{h}{h}{h}{h}{tr}
+            {v}{rank_l}       {v}
+            {v}         {v}
+            {v}    {suit}    {v}
+            {v}         {v}
+            {v}         {v}
+            {v}       {rank_r}{v}
+            {bl}{h}{h}{h}{h}{h}{h}{h}{h}{h}{br}
+        """)
         face_down = dedent("""\
-            {tl}{h}{h}{h}{h}{h}{h}{h}{h}{tr}
+            {tl}{h}{h}{h}{h}{h}{h}{h}{h}{h}{tr}
             {v}░░░░░░░░░{v}
             {v}░░░░░░░░░{v}
             {v}░ H I D ░{v}
             {v}░ D E N ░{v}
             {v}░░░░░░░░░{v}
             {v}░░░░░░░░░{v}
-            {bl}{h}{h}{h}{h}{h}{h}{h}{h}{br}
+            {bl}{h}{h}{h}{h}{h}{h}{h}{h}{h}{br}
         """)
+        cursor.executemany(
+            "INSERT INTO card_templates(name, template) VALUES(?,?)",
+            [("face_up", face_up), ("face_down", face_down)]
+        )
 
-        cursor.executemany("""
-            INSERT INTO card_templates(name, template) VALUES(?,?)
-            """,[
-                ("face_up", face_up),
-                ("face_down", face_down),
-            ])
-        
+    # Ensure default active theme is set
+    cursor.execute("INSERT OR IGNORE INTO settings(key, value) VALUES('active_theme', 'unicode');")
+
+    connect.commit()
+    connect.close()
 
 
-# Denoting functions now ( Setters/Getters and Theme helpers )
+# ----- Settings & Theme helpers -----
 
 def setActiveTheme(name, path=DB_PATH):
     connect = sqlite3.connect(path)
@@ -116,20 +116,29 @@ def setActiveTheme(name, path=DB_PATH):
 def getActiveTheme(path=DB_PATH):
     connect = sqlite3.connect(path)
     cursor = connect.cursor()
-    cursor.execute("SELECT value FROM setting WHERE key='active_theme'")
-    themeName = cursor.fetchone()[0]
+    # FIX: table name 'settings'
+    cursor.execute("SELECT value FROM settings WHERE key='active_theme'")
+    row = cursor.fetchone()
+    if not row:
+        connect.close()
+        raise RuntimeError("No active_theme set in settings")
+    themeName = row[0]
+
     cursor.execute("""
-            SELECT name, spade, heart, diamond, club, top_left, top_right, bottom_left, bottom_right, h, v
-            FROM themes WHERE name=?
-                   """, (themeName,))
+        SELECT name, spade, heart, diamond, club,
+               top_left, top_right, bottom_left, bottom_right, h, v
+        FROM themes WHERE name=?
+    """, (themeName,))
     row = cursor.fetchone()
     connect.close()
     if not row:
-        raise RuntimeError("Active theme not found")
+        raise RuntimeError(f"Active theme '{themeName}' not found in themes")
     keys = ["name","spade","heart","diamond","club","tl","tr","bl","br","h","v"]
     return dict(zip(keys, row))
 
-# Load and Render Template Functions
+
+# ----- Template loader & render -----
+
 def _loadTemplate(name, path=DB_PATH):
     connect = sqlite3.connect(path)
     cursor = connect.cursor()
@@ -140,17 +149,13 @@ def _loadTemplate(name, path=DB_PATH):
         raise ValueError(f"Template '{name}' not found")
     return row[0]
 
-# Rank --> value of the card, suit --> spade, heart, diamond, club
 def renderCard(rank, suit, hidden=False, path=DB_PATH):
     """
-    rank: 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'
-    suit: 'S', 'H', 'D', 'C'
+    rank: 'A','2'..'10','J','Q','K'
+    suit: 'S','H','D','C'
     """
     theme = getActiveTheme(path)
-    if hidden:
-        tmpl = _loadTemplate("face_down", path)
-    else:
-        tmpl = _loadTemplate("face_up", path)
+    tmpl = _loadTemplate("face_down" if hidden else "face_up", path)
 
     suit_char = {
         "S": theme["spade"],
@@ -159,7 +164,7 @@ def renderCard(rank, suit, hidden=False, path=DB_PATH):
         "C": theme["club"],
     }[suit]
 
-    rank_l = rank.ljust(2)
+    rank_l = rank.ljust(2)  # handles '10'
     rank_r = rank.rjust(2)
 
     out = tmpl.format(
@@ -167,19 +172,18 @@ def renderCard(rank, suit, hidden=False, path=DB_PATH):
         rank_r=rank_r,
         suit=suit_char,
         tl=theme["tl"], tr=theme["tr"], bl=theme["bl"], br=theme["br"],
-        h=theme["h"], v=theme["v"]
+        h=theme["h"], v=theme["v"],
     )
     return out.splitlines()
 
 def renderHand(cards, hideFirst=False, path=DB_PATH):
     """
-    cards: list of (rank, suit) e.g. [('A', 'S'), ('10', 'H')]
-    return a single string with cards "side by side"
+    cards: list of (rank, suit) e.g. [('A','S'), ('10','H')]
+    return a single string with cards side by side
     """
-
     blocks = [
-        renderCard(r,s,hidden=(hideFirst and i == 0), path=path)
-        for i, (r,s) in enumerate(cards)
+        renderCard(r, s, hidden=(hideFirst and i == 0), path=path)
+        for i, (r, s) in enumerate(cards)
     ]
     lines = []
     rows = len(blocks[0])
@@ -188,12 +192,12 @@ def renderHand(cards, hideFirst=False, path=DB_PATH):
     return "\n".join(lines)
 
 
-# For stats; Record and Query
+# ----- Stats: record & query -----
 
-def record_round(playerID, bet, outcome, delta, playerTotal=None, dealerTotal=None, notes=None, path=DB_PATH):
+def recordRound(playerID, bet, outcome, delta, playerTotal=None, dealerTotal=None, notes=None, path=DB_PATH):
     """
-    outcome: 'win', 'lose', 'push', 'blackjack'
-    delta: net chip change (e.g., +10 for win, -10 for lose, +15 for blackjack if 3:2 on 10 bet, etc.)
+    outcome: 'win','lose','push','blackjack'
+    delta: net chip change
     """
     connect = sqlite3.connect(path)
     cursor = connect.cursor()
@@ -207,7 +211,6 @@ def record_round(playerID, bet, outcome, delta, playerTotal=None, dealerTotal=No
     connect.commit()
     connect.close()
 
-# return dict of stats (saves over time)
 def getPlayerStats(playerID, path=DB_PATH):
     connect = sqlite3.connect(path)
     cursor = connect.cursor()
@@ -227,7 +230,7 @@ def getPlayerStats(playerID, path=DB_PATH):
     pushes = counts.get("push", 0)
     blackjacks = counts.get("blackjack", 0)
     winRate = (wins / games) if games else 0.0
-    averageBet = (total_bet / games ) if games else 0.0
+    averageBet = (total_bet / games) if games else 0.0
 
     connect.close()
     return {
@@ -241,4 +244,3 @@ def getPlayerStats(playerID, path=DB_PATH):
         "net": net,
         "total_bet": total_bet,
     }
-    

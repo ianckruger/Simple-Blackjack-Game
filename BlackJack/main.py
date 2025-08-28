@@ -4,6 +4,11 @@ from database_utils import init_db, renderHand, recordRound, getPlayerStats
 suits = ["H", "D", "S", "C"]
 ranks = ["2","3","4", "5", "6", "7", "8", "9", "10","J","Q","K","A"]
 deck = [rank + suit for suit in suits for rank in ranks]
+values ={
+    "2": 2, "3": 3, "4": 4, "5": 5, "6": 6,
+    "7": 7, "8": 8, "9": 9, "10": 10,
+    "J": 10, "Q": 10, "K": 10
+}
 
 def shuffleCards() :
     # While Original array is not empty, add to new array
@@ -14,36 +19,52 @@ def shuffleCards() :
 
     return newCards
 
-def getCard(playedCards,cards):
+def getCard(playedCards,cards, totalValue):
     index = rand.randint(0,len(cards)-1)
     card1 = cards[index]
     playedCards.append(card1)
     cards.pop(index)
 
-    return card1
+    if (card1[:-1] == "A"):
+        choice = input("Would you like to count Ace as 1 or 11?: ")
+        if str(choice) == "11":
+            totalValue += 11
+        else:
+            totalValue += 1
+    else:
+        totalValue += values[card1[:-1]]
 
-def displayCards():
-    # Print out cards in playedCards, if total card points over 21, or == 21, return 
+    return totalValue
+
+def compareCards():
+    # Print out cards in playedCards and also dealer cards. 
 
     return False
 
-def compareCards():
-
-    return True
 
 def playRound():
     totalValue = 0
     playingDeck = shuffleCards()
     playedCards = []
-    card1 = getCard(playedCards, playingDeck)
-    card2 = getCard(playedCards, playingDeck)
-    print(renderHand(playedCards))
-    if (card1[:-1] == "A" or card2[:-1] == "A"):
-        choice = input("Would you like to count Ace as 1 or 11?")
-        if str(choice) == "11":
-            totalValue += 11
-        else:
-            totalValue += 1
+    endRound = False
+    while(not endRound):
+        totalValue = getCard(playedCards, playingDeck, totalValue)
+        print(renderHand(playedCards))
+        print(totalValue)
+        if(totalValue == 21):
+            print("Blackjack! You win.")
+            endRound = True
+        elif(totalValue > 21):
+            print("You lose.")
+            endRound = True
+        if(len(playedCards) >= 2):
+            choice = input("Would you like to hit or hold?")
+            if choice == "hit":
+                pass
+            else:
+                compareCards()
+                endRound = True
+    
 
 
     # if  not overLimit:

@@ -194,7 +194,7 @@ def renderHand(cards, hideFirst=False, path=DB_PATH):
 
 # ----- Stats: record & query -----
 
-def recordRound(playerID, bet, outcome, delta, playerTotal=None, dealerTotal=None, notes=None, path=DB_PATH):
+def recordRound(playerID, outcome, bet=0, delta=0, playerTotal=None, dealerTotal=None, notes=None, path=DB_PATH):
     """
     outcome: 'win','lose','push','blackjack'
     delta: net chip change

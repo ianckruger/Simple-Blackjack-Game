@@ -1,4 +1,6 @@
 import random as rand
+import os
+import time
 from database_utils import init_db, renderHand, recordRound, getPlayerStats
 
 suits = ["H", "D", "S", "C"]
@@ -19,51 +21,95 @@ def shuffleCards() :
 
     return newCards
 
-def getCard(playedCards,cards, totalValue):
+def getCard(playedCards,cards, totalValue, dealer=False):
     index = rand.randint(0,len(cards)-1)
     card1 = cards[index]
     playedCards.append(card1)
     cards.pop(index)
 
-    if (card1[:-1] == "A"):
-        choice = input("Would you like to count Ace as 1 or 11?: ")
-        if str(choice) == "11":
-            totalValue += 11
+    if not dealer:
+        if (card1[:-1] == "A"):
+            if totalValue > 10:
+                totalValue += 1
+            else:
+                choice = input("Would you like to count Ace as 1 or 11?: ")
+                if str(choice) == "11":
+                    totalValue += 11
+                else:
+                    totalValue += 1
         else:
-            totalValue += 1
+            totalValue += values[card1[:-1]]
+
+        return totalValue
     else:
-        totalValue += values[card1[:-1]]
+        if (card1[:-1] == "A"):
+            if totalValue > 10:
+                totalValue += 1
+            else:
+                totalValue += 11
+        else:
+            totalValue += values[card1[:-1]]
 
-    return totalValue
+        return totalValue
 
-def compareCards():
+
+def compareCards(playerCards, dealerCards, totalValue, dealerValue, playingDeck):
     # Print out cards in playedCards and also dealer cards. 
+    printTable(playerCards, dealerCards, hideFirst=False)
+    while(dealerValue < 17):
+        dealerValue = getCard(dealerCards, playingDeck, dealerValue, dealer=True)
+        printTable(playerCards, dealerCards, False)
+    
+    # Dealer has 17 or over, break and compare
+    if ( dealerValue > totalValue and dealerValue < 22):
+        print("You lose. Better luck next time!")
+        return "lose"
+    elif dealerValue == totalValue:
+        print("Push. Next game")
+        return "push"
+    
+    else:
+        print("You win! Congradulations")
+        return "win"
 
-    return False
 
+def printTable(playerCards, dealerCards, hideFirst=True):
+    os.system('cls')
+    print(renderHand(dealerCards, hideFirst))
+    print(renderHand(playerCards))
 
-def playRound():
+def playRound(outcome):
     totalValue = 0
+    dealerValue = 0
     playingDeck = shuffleCards()
-    playedCards = []
+    playerCards = []
+    dealerCards= []
+    dealerValue = getCard(dealerCards, playingDeck, dealerValue, dealer=True)
+    dealerValue = getCard(dealerCards, playingDeck, dealerValue, dealer=True)
     endRound = False
     while(not endRound):
-        totalValue = getCard(playedCards, playingDeck, totalValue)
-        print(renderHand(playedCards))
+        totalValue = getCard(playerCards, playingDeck, totalValue)
+        printTable(playerCards, dealerCards)
         print(totalValue)
         if(totalValue == 21):
             print("Blackjack! You win.")
             endRound = True
+            return "blackjack"
+            
         elif(totalValue > 21):
             print("You lose.")
             endRound = True
-        if(len(playedCards) >= 2):
+            return "lose"
+            break
+        if(len(playerCards) >= 2):
             choice = input("Would you like to hit or hold?")
             if choice == "hit":
                 pass
             else:
-                compareCards()
-                endRound = True
+                outcome = compareCards(playerCards, dealerCards, totalValue, dealerValue, playingDeck)
+                return outcome
+
+    
     
 
 
@@ -71,28 +117,29 @@ def playRound():
     #     card3 = getCard(playedCards, playingDeck)
     #     displayCards()
 
-def login():
+def login(username):
     print("Do you want to login (or not, and continue as guest)?")
     choice = input("Y/N: ")
     saveStats = False
-    if (choice.lower == "y"):
+    if (choice.lower() == "y"):
         saveStats = True
-        username = input("Username: ")
+        username += input("Username: ")
+
+    return saveStats
 
 
 
 if __name__ == "__main__":
-    # init_db()                         # create DB & defaults on first run
-    # # set_active_theme("ascii")       # try the ASCII look
-    # print(renderHand([("A","S"), ("10","H")]))
-    # print()
-    # print(renderHand([("K","D"), ("7","C"), ("3","H")], hideFirst=True))
-
-    # # Record a couple of sample rounds
-    # recordRound("player1", bet=10, outcome="win", delta=+10, playerTotal=21, dealerTotal=18)
-    # recordRound("player1", bet=10, outcome="blackjack", delta=+15, playerTotal=21, dealerTotal=20)
-    # recordRound("player1", bet=10, outcome="lose", delta=-10, playerTotal=18, dealerTotal=19)
-    # print("\nStats:", getPlayerStats("player1"))
     init_db()
-    login()
-    playRound() 
+    username = ""
+    outcome = ""
+    saveStats = login(username)
+    play = True
+    while play:
+        outcome = playRound(outcome)
+        if saveStats:
+            recordRound(username, outcome)
+        choice = input("Would you like to play again? Y/N: ")
+        if choice.lower() != "y":
+            play = False
+
